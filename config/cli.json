@@ -1,0 +1,72 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/@undefineds/xpod/^0.0.0/components/context.jsonld"
+  ],
+  "@graph": [
+    {
+      "comment": "Extend the CLI with additional parameters",
+      "@id": "urn:solid-server-app-setup:default:CliExtractor",
+      "@type": "YargsCliExtractor",
+      "parameters": [
+        {
+          "@type": "YargsParameter",
+          "name": "minioAccessKey",
+          "options": {
+            "type": "string",
+            "describe": "The access key for the Minio server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "minioSecretKey",
+          "options": {
+            "type": "string",
+            "describe": "The secret key for the Minio server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "minioEndpoint",
+          "options": {
+            "type": "string",
+            "describe": "The endpoint for the Minio server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "minioBucketName",
+          "options": {
+            "type": "string",
+            "describe": "The bucket name for the Minio server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "redisClient",
+          "options": {
+            "type": "string",
+            "describe": "The uri for the Redis server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "redisUsername",
+          "options": {
+            "type": "string",
+            "describe": "The username for the Redis server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "redisPassword",
+          "options": {
+            "type": "string",
+            "describe": "The password for the Redis server."
+          }
+        }
+      ]
+    }
+  ]
+}
+  

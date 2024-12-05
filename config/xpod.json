@@ -1,0 +1,30 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/@undefineds/xpod/^0.0.0/components/context.jsonld",
+  "import": [
+    "./cli.json",
+    "./resolver.json"
+  ],
+  "@graph": [
+    {
+      "comment": "An accessor for a Quadstore",
+      "@type": "QuadstoreSparqlDataAccessor",
+      "@id": "urn:undefineds:xpod:QuadstoreSparqlDataAccessor"
+    },
+    {
+      "comment": "An accessor for a Minio",
+      "@type": "MinioDataAccessor",
+      "@id": "urn:undefineds:xpod:MinioDataAccessor"
+    },
+    {
+      "comment": "Uses the configurable logger for logging",
+      "@type": "Override",
+      "overrideInstance": {
+        "@id": "urn:solid-server:default:LoggerFactory"
+      },
+      "overrideParameters": {
+        "@type": "ConfigurableLoggerFactory",
+        "level": { "@id": "urn:solid-server:default:variable:loggingLevel" }
+      }
+    }
+  ]
+}
