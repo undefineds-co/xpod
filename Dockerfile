@@ -34,7 +34,7 @@ COPY --from=build /xpod/node_modules ./node_modules
 EXPOSE 3000
 
 # Set command run by the container
-ENTRYPOINT ["node", "node_modules/@solid/community-server/bin/server.js", "-m", "." ]
-
-# By default run in filemode (overriden if passing alternative arguments or env vars)
-ENV CSS_CONFIG=config/main.server.json,config/extensions.server.json
+ENTRYPOINT [\
+"node", "node_modules/@solid/community-server/bin/server.js", \
+"-c", "config/main.server.json", "config/extensions.server.json", \
+"-m", "." ]
