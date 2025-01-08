@@ -2,9 +2,7 @@ import { Client, BucketItemStat } from 'minio';
 import type { DataAccessor } from '@solid/community-server';
 import type { Readable } from 'node:stream';
 import { DataFactory } from 'n3';
-import type { Representation } from '@solid/community-server/dist/http/representation/Representation';
 import { RepresentationMetadata } from '@solid/community-server/dist/http/representation/RepresentationMetadata';
-import type { ResourceIdentifier } from '@solid/community-server/dist/http/representation/ResourceIdentifier';
 import { getLoggerFor } from '@solid/community-server/dist/logging/LogUtil';
 import { NotFoundHttpError } from '@solid/community-server/dist/util/errors/NotFoundHttpError';
 import { guardStream } from '@solid/community-server/dist/util/GuardedStream';
@@ -16,7 +14,11 @@ import { CONTENT_TYPE_TERM, DC, IANA, LDP, POSIX, RDF, SOLID_META, XSD } from '@
 import { parseQuads, serializeQuads } from '@solid/community-server/dist/util/QuadUtil';
 import { addResourceMetadata, updateModifiedDate } from '@solid/community-server/dist/util/ResourceUtil';
 import { toLiteral, toNamedTerm } from '@solid/community-server/dist/util/TermUtil';
-
+import type { 
+  ResourceIdentifier,
+  Representation,
+  MetadataRecord
+} from '@solid/community-server';
 
 export class MinioDataAccessor implements DataAccessor {
   protected readonly logger = getLoggerFor(this);
@@ -31,18 +33,6 @@ export class MinioDataAccessor implements DataAccessor {
     endpoint: string,
     bucketName: string,
   ) {
-    if (!accessKey) {
-      throw new Error('CSS_MINIO_ACCESS_KEY is not set');
-    }
-    if (!secretKey) {
-      throw new Error('CSS_MINIO_SECRET_KEY is not set');
-    }
-    if (!endpoint) {
-      throw new Error('CSS_MINIO_ENDPOINT is not set');
-    }
-    if (!bucketName) {
-      throw new Error('CSS_MINIO_BUCKET_NAME is not set');
-    }
     this.resourceMapper = resourceMapper;
     this.client = new Client({
       accessKey,
@@ -138,15 +128,21 @@ export class MinioDataAccessor implements DataAccessor {
    */
   public async writeDocument(identifier: ResourceIdentifier, data: Guarded<Readable>, metadata: RepresentationMetadata): Promise<void> {
     const url = new URL(identifier.path);
-    this.logger.info(`writeDocument: ${identifier.path}[${url.pathname}]`)
     const link = await this.resourceMapper.mapUrlToFilePath(identifier, false);
-    await this.client.putObject(
-      this.bucketName,
-      url.pathname,
-      data,
-      metadata.contentLength,
-      this.encodeMetadata(link, metadata) || undefined,
-    );
+    const itemMetadata = this.encodeMetadata(link, metadata);
+    this.logger.info(`Write document: ${identifier.path} ${JSON.stringify(itemMetadata)}`)
+    try {
+      await this.client.putObject(
+        this.bucketName,
+        url.pathname,
+        data,
+        metadata.contentLength,
+        itemMetadata || undefined,
+      );
+    } catch (error) {
+      this.logger.error(`Error writing document: ${identifier.path} ${error}`)
+      throw error;
+    }
   }
 
   /**
@@ -159,7 +155,7 @@ export class MinioDataAccessor implements DataAccessor {
    */
   public async writeContainer(identifier: ResourceIdentifier, metadata: RepresentationMetadata): Promise<void> {
     const url = new URL(identifier.path)
-    this.logger.info(`writeContainer: ${identifier.path}[${url.pathname}]`)
+    this.logger.info(`Write container: ${identifier.path}.`)
     const link = await this.resourceMapper.mapUrlToFilePath(identifier, false);
     await this.client.putObject(
       this.bucketName,
@@ -192,7 +188,7 @@ export class MinioDataAccessor implements DataAccessor {
    */
   public async deleteResource(identifier: ResourceIdentifier): Promise<void> {
     const link = new URL(identifier.path)
-    this.logger.info(`deleteResource: ${identifier.path}[${link.pathname}`)
+    this.logger.info(`Delete resource: ${identifier.path}`)
     await this.client.removeObject(this.bucketName, link.pathname);
   }
 
@@ -210,6 +206,7 @@ export class MinioDataAccessor implements DataAccessor {
       // As a result, we should only set the contentType derived from the file path,
       // when no previous metadata entry for contentType is present.
     if (typeof metadata.contentType === 'undefined') {
+      this.logger.info(`Setting contentType for ${link.filePath} ${link.contentType}`)
       metadata.set(CONTENT_TYPE_TERM, link.contentType);
     }
     return metadata;
@@ -280,20 +277,19 @@ export class MinioDataAccessor implements DataAccessor {
     // A media type is supported if the FileIdentifierMapper can correctly store it.
     // This allows restoring the appropriate content-type on data read (see getFileMetadata).
     if (isContainerPath(link.filePath) || typeof metadata.contentType !== 'undefined') {
+      this.logger.info(`Removing content-type for ${link.filePath} ${metadata.contentType}`);
       metadata.removeAll(CONTENT_TYPE_TERM);
     }
-    const quads = metadata.quads();
-    if (quads.length === 0) {
+    const contentTypeObject = metadata.contentTypeObject
+    if (contentTypeObject === undefined
+      || Object.keys(contentTypeObject.parameters).length === 0) {
       return null;
     }
     // Write metadata to file if there are quads remaining
-    return {'quads': quads};
+    return contentTypeObject.parameters;
   }
 
-  protected decodeMetadata(link: ResourceLink, metadata: any): RepresentationMetadata {
-    const quads = (metadata['quads'] || []).map((q: any) => {
-      return DataFactory.quad(q.subject, q.predicate, q.object, q.graph);
-    });
-    return new RepresentationMetadata(link.identifier).addQuads(quads);
+  protected decodeMetadata(link: ResourceLink, metadata: MetadataRecord): RepresentationMetadata {
+    return new RepresentationMetadata(link.identifier, metadata);
   }
 }

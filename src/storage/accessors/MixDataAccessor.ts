@@ -1,11 +1,32 @@
-import { QuadstoreSparqlDataAccessor } from './QuadstoreSparqlDataAccessor';
-import type { DataAccessor, IdentifierStrategy } from '@solid/community-server';
-import type { Representation } from '@solid/community-server/dist/http/representation/Representation';
-import type { ResourceIdentifier } from '@solid/community-server/dist/http/representation/ResourceIdentifier';
-import { INTERNAL_QUADS } from '@solid/community-server/dist/util/ContentTypes';
-import type { RepresentationMetadata } from '@solid/community-server/dist/http/representation/RepresentationMetadata';
-import type { Guarded } from '@solid/community-server/dist/util/GuardedStream';
 import type { Readable } from 'stream';
+import arrayifyStream from 'arrayify-stream';
+import type { Quad, NamedNode } from '@rdfjs/types';
+import { DataFactory } from 'n3';
+import { 
+  isContainerIdentifier,
+  RepresentationMetadata,
+  INTERNAL_QUADS,
+  NotFoundHttpError,
+  CONTENT_TYPE_TERM,
+  CONTENT_LENGTH_TERM,
+  DC,
+  POSIX,
+  SOLID_META,
+  XSD,
+  updateModifiedDate,
+  toLiteral
+} from '@solid/community-server';
+import type {
+  Representation,
+  ResourceIdentifier,
+  Guarded,
+  DataAccessor,
+  IdentifierStrategy,
+} from '@solid/community-server';
+import { QuadstoreSparqlDataAccessor } from './QuadstoreSparqlDataAccessor';
+
+
+const { namedNode } = DataFactory;
 
 
 export class MixDataAccessor extends QuadstoreSparqlDataAccessor {
@@ -30,24 +51,46 @@ export class MixDataAccessor extends QuadstoreSparqlDataAccessor {
   /**
    * Checks if the given representation is unstructured.
    */
-  private async isUnstructured(metadata: RepresentationMetadata): Promise<boolean> {
-    this.logger.debug(`isUnstructured: ${metadata.contentType}`)
+  private isUnstructured(identifier: ResourceIdentifier, metadata: RepresentationMetadata): boolean {
+    this.logger.info(`${identifier.path} internal content type: ${metadata.contentType}`)
     return metadata.contentType !== INTERNAL_QUADS;
   }
 
   public override async getData(identifier: ResourceIdentifier): Promise<Guarded<Readable>> {
     const metadata = await this.getMetadata(identifier);
-    if (await this.isUnstructured(metadata)) {
-      return this.unstructuredDataAccessor.getData(identifier);
+    if (this.isUnstructured(identifier, metadata)) {
+      return await this.unstructuredDataAccessor.getData(identifier);
     }
-    return super.getData(identifier);
+    return await super.getData(identifier);
   }
+
+    /**
+   * Returns the metadata for the corresponding identifier.
+   */
+  public override async getMetadata(identifier: ResourceIdentifier): Promise<RepresentationMetadata> {
+      this.logger.info(`Getting metadata for ${identifier.path}`);
+      const name = namedNode(identifier.path);
+      const query = this.sparqlConstruct(this.getMetadataNode(name));
+      const stream = await this.sendSparqlConstruct(query);
+      const quads: Quad[] = await arrayifyStream(stream);
+
+      if (quads.length === 0) {
+        throw new NotFoundHttpError();
+      }
+
+      const metadata = new RepresentationMetadata(identifier).addQuads(quads);
+      if (!isContainerIdentifier(identifier) && !metadata.contentType) {
+        metadata.contentType = INTERNAL_QUADS;
+      }
+  
+      return metadata;
+    }
 
   public override async writeContainer(
     identifier: ResourceIdentifier,
     metadata: RepresentationMetadata,
   ): Promise<void> {
-    if (await this.isUnstructured(metadata)) {
+    if (this.isUnstructured(identifier, metadata)) {
       await this.unstructuredDataAccessor.writeContainer(identifier, metadata);
     }
     await super.writeContainer(identifier, metadata);
@@ -58,10 +101,10 @@ export class MixDataAccessor extends QuadstoreSparqlDataAccessor {
     data: Guarded<Readable>,
     metadata: RepresentationMetadata,
   ): Promise<void> {
-    if (await this.isUnstructured(metadata)) {
-      return this.unstructuredDataAccessor.writeDocument(identifier, data, metadata);
+    if (this.isUnstructured(identifier, metadata)) {
+      return await this.writeUnstructuredDocument(identifier, data, metadata);
     } else {
-      return super.writeDocument(identifier, data, metadata);
+      return await super.writeDocument(identifier, data, metadata);
     }
   }
 
@@ -69,4 +112,25 @@ export class MixDataAccessor extends QuadstoreSparqlDataAccessor {
     await this.unstructuredDataAccessor.deleteResource(identifier);
     return super.deleteResource(identifier);
   }
+
+  private async writeUnstructuredDocument(identifier: ResourceIdentifier, data: Guarded<Readable>, metadata: RepresentationMetadata): Promise<void> {
+    await this.unstructuredDataAccessor.writeDocument(identifier, data, metadata);
+    metadata = await this.unstructuredDataAccessor.getMetadata(identifier);
+    const removing = [];
+    for (const quad of metadata.quads()) {
+      // ignore invalid quads
+      if (!/^http/.test(quad.predicate.value)) {
+        removing.push(quad);
+      }
+    }
+    metadata.removeQuads(removing);
+    try {
+      await super.writeMetadata(identifier, metadata);
+    } catch (error) {
+      this.logger.error(`Error writing metadata for ${identifier.path}: ${error}`);
+      await this.unstructuredDataAccessor.deleteResource(identifier);
+      throw error;
+    }
+  }
 }
+

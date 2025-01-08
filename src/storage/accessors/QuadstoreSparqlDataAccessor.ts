@@ -68,8 +68,12 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    */
   private getPublicEndpoint(endpoint: string): string {
     const url = new URL(endpoint);
-    const host = url.host.split(':')[0];
-    return `${url.protocol}//${host}`;
+    if (url.protocol === 'sqlite:') {
+      return endpoint;
+    } else {
+      const host = url.host.split(':')[0];
+      return `${url.protocol}//${host}`;
+    }
   }
 
   /**
@@ -115,7 +119,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
   }
 
   public async* getChildren(identifier: ResourceIdentifier): AsyncIterableIterator<RepresentationMetadata> {
-    this.logger.info(`Getting children for ${identifier.path}`);
+    this.logger.verbose(`Getting children for ${identifier.path}`);
     // Only triples that have a container identifier as subject are the containment triples
     const name = namedNode(identifier.path);
     const stream = await this.sendSparqlConstruct(this.sparqlConstruct(name));
@@ -128,7 +132,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    * Writes the given metadata for the container.
    */
   public async writeContainer(identifier: ResourceIdentifier, metadata: RepresentationMetadata): Promise<void> {
-    this.logger.info(`Writing container ${identifier.path}.`);
+    this.logger.info(`Writing container ${identifier.path} ${JSON.stringify(metadata.contentTypeObject)}}`);
     addResourceMetadata(metadata, true);
     updateModifiedDate(metadata);
     const { name, parent } = this.getRelatedNames(identifier);
@@ -140,7 +144,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    */
   public async writeDocument(identifier: ResourceIdentifier, data: Guarded<Readable>, metadata: RepresentationMetadata):
   Promise<void> {
-    this.logger.info(`Writing document ${identifier.path}.`);
+    this.logger.info(`Writing document ${identifier.path} ${JSON.stringify(metadata.contentTypeObject)}}`);
     if (this.isMetadataIdentifier(identifier)) {
       throw new ConflictHttpError('Not allowed to create NamedNodes with the metadata extension.');
     }
@@ -162,7 +166,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    * Reads the metadata and stores it.
    */
   public async writeMetadata(identifier: ResourceIdentifier, metadata: RepresentationMetadata): Promise<void> {
-    this.logger.info(`Writing metadata for ${identifier.path}.`);
+    this.logger.info(`Writing metadata for ${identifier.path} ${JSON.stringify(metadata.contentTypeObject)}`);
     const { name } = this.getRelatedNames(identifier);
     const metaName = this.getMetadataNode(name);
 
@@ -200,7 +204,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    *
    * @param name - Name of the (non-metadata) resource.
    */
-  private getMetadataNode(name: NamedNode): NamedNode {
+  protected getMetadataNode(name: NamedNode): NamedNode {
     return namedNode(`meta:${name.value}`);
   }
 
@@ -216,7 +220,7 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    *
    * @param name - Name of the resource to query.
    */
-  private sparqlConstruct(name: NamedNode): ConstructQuery {
+  protected sparqlConstruct(name: NamedNode): ConstructQuery {
     const pattern = quad(variable('s'), variable('p'), variable('o'));
     return {
       queryType: 'CONSTRUCT',
@@ -246,13 +250,13 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    */
   private sparqlInsert(name: NamedNode, metadata: RepresentationMetadata, parent?: NamedNode, triples?: Quad[]):
   Update {
-    this.logger.info(`Inserting ${name.value} with metadata:`);
+    this.logger.verbose(`Inserting ${name.value} with metadata:`);
     for (const quad of metadata.quads()) {
-      this.logger.info(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
+      this.logger.verbose(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
     }
-    this.logger.info(`parent: ${parent?.value} with triples:`);
+    this.logger.verbose(`parent: ${parent?.value} with triples:`);
     for (const quad of triples || []) {
-      this.logger.info(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
+      this.logger.verbose(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
     }
     const metaName = this.getMetadataNode(name);
 
@@ -294,9 +298,9 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    * @param metadata - New metadata of the resource.
    */
   private sparqlInsertMetadata(metaName: NamedNode, metadata: RepresentationMetadata): Update {
-    this.logger.info(`Inserting metadata ${metaName} with:`);
+    this.logger.verbose(`Inserting metadata NamedNode[${metaName}] with:`);
     for (const quad of metadata.quads()) {
-      this.logger.info(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
+      this.logger.verbose(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
     }
     // Insert new metadata and containment triple
     const insert: GraphQuads[] = [ this.sparqlUpdateGraph(metaName, metadata.quads()) ];
@@ -337,7 +341,9 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
     if (parent) {
       update.updates.push({
         updateType: 'delete',
-        delete: [ this.sparqlUpdateGraph(parent, [ quad(parent, LDP.terms.contains, name) ]) ],
+        delete: [
+          this.sparqlUpdateGraph(parent, [ quad(parent, LDP.terms.contains, name) ])
+        ],
       });
     }
 
@@ -354,7 +360,11 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
     this.logger.info(`Deleting all from ${name.value}`);
     return {
       updateType: 'deletewhere',
-      delete: [ this.sparqlUpdateGraph(name, [ quad(variable(`s`), variable(`p`), variable(`o`)) ]) ],
+      delete: [
+        this.sparqlUpdateGraph(
+          name, [ quad(variable(`s`), variable(`p`), variable(`o`)) ]
+        )
+      ],
     };
   }
 
@@ -366,9 +376,9 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    * @param triples - Triples/triple patterns to select.
    */
   private sparqlUpdateGraph(name: NamedNode, triples: Quad[]): GraphQuads {
-    this.logger.info(`Creating graph ${name.value} with:`);
+    this.logger.verbose(`Creating graph ${name.value} with:`);
     for (const quad of triples) {
-      this.logger.info(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
+      this.logger.verbose(`  ${quad.subject.value} ${quad.predicate.value} ${quad.object.value}`);
     }
     return { type: 'graph', name, triples };
   }
@@ -378,38 +388,38 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    *
    * @param sparqlQuery - Query to execute.
    */
-  private async sendSparqlConstruct(sparqlQuery: ConstructQuery): Promise<Guarded<Readable>> {
+  protected async sendSparqlConstruct(sparqlQuery: ConstructQuery): Promise<Guarded<Readable>> {
     const query = this.generator.stringify(sparqlQuery);
     const logger = this.logger;
-    logger.info(`Sending SPARQL CONSTRUCT query to ${this.publicEndpoint}: ${query}`);
+    logger.verbose(`Sending SPARQL CONSTRUCT query to ${this.publicEndpoint}: ${query}`);
     try {
       await this.waitForStoreReady();
       const start = Date.now();
       const result = await this.engine.queryQuads(query);
       const end = Date.now();
-      logger.info(`SPARQL CONSTRUCT query success. cost time: ${end - start}ms`);
+      logger.verbose(`SPARQL CONSTRUCT query success. cost time: ${end - start}ms`);
       const readable = new Readable({
         objectMode: true,
         read() {
           result.on('start', () => {
-            logger.info(`SPARQL CONSTRUCT query start. cost time: ${Date.now() - start}ms`);
+            logger.debug(`SPARQL CONSTRUCT query start. cost time: ${Date.now() - start}ms`);
           });
           result.on(
             'data',
             (chunk) => {
               this.push(chunk);
-              logger.info(`SPO: ${chunk.subject.value} ${chunk.predicate.value} ${chunk.object.value}`);
+              logger.debug(`SPO: ${chunk.subject.value} ${chunk.predicate.value} ${chunk.object.value}`);
             }
           );
           result.on('end', () => {
-            logger.info(`SPARQL CONSTRUCT query end. cost time: ${Date.now() - start}ms`);
+            logger.debug(`SPARQL CONSTRUCT query end. cost time: ${Date.now() - start}ms`);
             this.push(null);
           });
         },
       });
       return guardStream(readable);
     } catch (error: unknown) {
-      logger.error(`SPARQL endpoint ${this.publicEndpoint} error: ${createErrorMessage(error)}`);
+      logger.error(`SPARQL ${query} endpoint ${this.publicEndpoint} error: ${createErrorMessage(error)}`);
       throw error;
     }
   }
@@ -421,15 +431,15 @@ export class QuadstoreSparqlDataAccessor implements DataAccessor {
    */
   private async sendSparqlUpdate(sparqlQuery: Update): Promise<void> {
     const query = this.generator.stringify(sparqlQuery);
-    this.logger.info(`Sending SPARQL UPDATE query to ${this.publicEndpoint}: ${query}`);
+    this.logger.verbose(`Sending SPARQL UPDATE query to ${this.publicEndpoint}: ${query}`);
     try {
       await this.waitForStoreReady();
       const start = Date.now();
       await this.engine.queryVoid(query);
       const end = Date.now();
-      this.logger.info(`SPARQL UPDATE query success. cost time: ${end - start}ms`);
+      this.logger.verbose(`SPARQL UPDATE query success. cost time: ${end - start}ms`);
     } catch (error: unknown) {
-      this.logger.error(`SPARQL endpoint ${this.publicEndpoint} error: ${createErrorMessage(error)}`);
+      this.logger.error(`SPARQL ${query} endpoint ${this.publicEndpoint} error: ${createErrorMessage(error)}`);
       throw error;
     }
   }

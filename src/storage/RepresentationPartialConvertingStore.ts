@@ -1,3 +1,5 @@
+import rdfParser from 'rdf-parse';
+
 import {
   PassthroughStore,
   PassthroughConverter,
@@ -45,7 +47,10 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
 
     const inConverterClass = this.inConverter.constructor.name;
     const outConverterClass = this.outConverter.constructor.name;
-    this.logger.debug(`Initializing with inConverter: ${inConverterClass}, outConverter: ${outConverterClass}, inPreferences: ${JSON.stringify(this.inPreferences)}`);
+    this.logger.debug(
+      `Initializing with inConverter: ${inConverterClass}, 
+      outConverter: ${outConverterClass}, 
+      inPreferences: ${JSON.stringify(this.inPreferences)}`);
   }
 
   private async shouldConvert(
@@ -65,19 +70,12 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
       return false;
     }
 
-    try {
-      await this.inConverter.canHandle({
-        identifier,
-        representation,
-        preferences,
-      } as RepresentationConverterArgs)
-    } catch (error) {
-      this.logger.debug(
-        `Could not convert ${identifier.path}: ${contentType} to ${preferencesType}`,
-      )
-      return false
+    const availableTypes = await rdfParser.getContentTypes();
+    if (!availableTypes.includes(contentType)) {
+      this.logger.debug(`Not converting ${identifier.path}: ${contentType} to ${preferencesType}`);
+      return false;
     }
-    this.logger.debug(
+    this.logger.info(
       `Converting ${identifier.path}: ${contentType} to ${preferencesType}`,
     )
     return true
@@ -88,12 +86,12 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
     preferences: RepresentationPreferences,
     conditions?: Conditions,
   ): Promise<Representation> {
-    const representation = await super.getRepresentation(identifier, preferences, conditions);
+    let representation = await super.getRepresentation(identifier, preferences, conditions);
     if (await this.shouldConvert(identifier, representation, preferences)) {
-      return this.outConverter.handleSafe({ identifier, representation, preferences });
-    } else {
-      return representation
+      representation = await this.outConverter.handleSafe({ identifier, representation, preferences });
     }
+    this.logger.info(`getRepresentation: ${identifier.path} ${representation.metadata.contentType}`);
+    return representation;
   }
 
   public override async addResource(
@@ -109,6 +107,7 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
         { identifier, representation, preferences: this.inPreferences },
       );
     }
+    this.logger.info(`addResource: ${identifier.path} ${representation.metadata.contentType}`);
     return this.source.addResource(identifier, representation, conditions);
   }
 
@@ -117,10 +116,9 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
     representation: Representation,
     conditions?: Conditions,
   ): Promise<ChangeMap> {
-    this.logger.debug(`setRepresentation: ${identifier.path}`);
     // When it is a metadata resource, convert it to Quads as those are expected in the later stores
     if (this.metadataStrategy.isAuxiliaryIdentifier(identifier)) {
-      this.logger.debug(`Converting metadata resource ${identifier.path} to ${INTERNAL_QUADS}`);
+      this.logger.info(`Converting metadata resource ${identifier.path} to ${INTERNAL_QUADS}`);
       representation = await this.inConverter.handleSafe(
         { identifier, representation, preferences: { type: { [INTERNAL_QUADS]: 1 }}},
       );
@@ -129,6 +127,7 @@ export class RepresentationPartialConvertingStore<T extends ResourceStore = Reso
         { identifier, representation, preferences: this.inPreferences },
       );
     }
+    this.logger.info(`setRepresentation: ${identifier.path} ${representation.metadata.contentType}`);
     return this.source.setRepresentation(identifier, representation, conditions);
   }
 }
