@@ -35,21 +35,6 @@
   ],
   "@graph": [
     {
-      "comment": "The settings of your email server.",
-      "@type": "Override",
-      "overrideInstance": {
-        "@id": "urn:solid-server:default:EmailSender"
-      },
-      "overrideParameters": {
-        "@type": "BaseEmailSender",
-        "senderName": "Community Solid Server <solid@example.email>",
-        "emailConfig_host": "smtp.example.email",
-        "emailConfig_port": 587,
-        "emailConfig_auth_user": "solid@example.email",
-        "emailConfig_auth_pass": "NYEaCsqV7aVStRCbmC"
-      }
-    },
-    {
       "comment": "Overrides the default rule to make sure internal data is stored on the file system.",
       "@type": "Override",
       "overrideInstance": {

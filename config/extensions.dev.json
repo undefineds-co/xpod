@@ -8,6 +8,21 @@
   ],
   "@graph": [
     {
+      "comment": "The settings of your email server.",
+      "@type": "Override",
+      "overrideInstance": {
+        "@id": "urn:solid-server:default:EmailSender"
+      },
+      "overrideParameters": {
+        "@type": "BaseEmailSender",
+        "senderName": "Undefineds Support Team <support@undefineds.co>",
+        "emailConfig_host": {"@id": "urn:solid-server:default:variable:emailConfigHost", "@type": "Variable"},
+        "emailConfig_port": {"@id": "urn:solid-server:default:variable:emailConfigPort", "@type": "Variable"},
+        "emailConfig_auth_user": {"@id": "urn:solid-server:default:variable:emailConfigAuthUser", "@type": "Variable"},
+        "emailConfig_auth_pass": {"@id": "urn:solid-server:default:variable:emailConfigAuthPass", "@type": "Variable"}
+      }
+    },
+    {
       "@id": "urn:undefineds:xpod:MixDataAccessor",
       "@type": "MixDataAccessor",
       "endpoint": "sqlite:./db.quadstore",

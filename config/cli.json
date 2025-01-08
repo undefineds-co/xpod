@@ -64,9 +64,40 @@
             "type": "string",
             "describe": "The password for the Redis server."
           }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "emailConfigHost",
+          "options": {
+            "type": "string",
+            "describe": "The host for the email server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "emailConfigPort",
+          "options": {
+            "type": "number",
+            "describe": "The port for the email server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "emailConfigAuthUser",
+          "options": {
+            "type": "string",
+            "describe": "The auth user for the email server."
+          }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "emailConfigAuthPass",
+          "options": {
+            "type": "string",
+            "describe": "The auth pass for the email server."
+          }
         }
       ]
     }
   ]
 }
-  
