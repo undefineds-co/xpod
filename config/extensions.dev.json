@@ -25,7 +25,7 @@
     {
       "@id": "urn:undefineds:xpod:MixDataAccessor",
       "@type": "MixDataAccessor",
-      "endpoint": "sqlite:./db.quadstore",
+      "endpoint": { "@id": "urn:solid-server:default:variable:sparqlEndpoint" },
       "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
       "unstructuredDataAccessor": { "@id": "urn:undefineds:xpod:RemoteDataAccessor" }
     },

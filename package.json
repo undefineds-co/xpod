@@ -1,8 +1,8 @@
 {
   "name": "xpod",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Xpod is an extended Community Solid Server, offering rich-feature, production-level Solid Pod and identity management.",
-  "repository": "https://github.com/undefineds-co/xpod",
+  "repository": "https://github.com/undefinedsco/xpod",
   "author": "developer@undefineds.co",
   "license": "MIT",
   "private": false,
@@ -24,6 +24,7 @@
     "build:components": "componentsjs-generator -s src -c dist/components -r undefineds",
     "prepare.": "yarn run build",
     "clean": "rm -r quadstore.sqlite; rm -r .internal",
+    "start": "community-solid-server -c config/main.json config/extensions.json -m .",
     "dev": "dotenv -e .env -- community-solid-server -c config/main.dev.json config/extensions.dev.json -m .",
     "local": "dotenv -e .env -- community-solid-server -c config/main.local.json config/extensions.local.json -m .",
     "server": "dotenv -e .env -- community-solid-server -c config/main.server.json config/extensions.server.json -m ."

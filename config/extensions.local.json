@@ -27,7 +27,7 @@
       "@type": "MixDataAccessor",
       "endpoint": { "@id": "urn:solid-server:default:variable:sparqlEndpoint" },
       "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
-      "unstructuredDataAccessor": { "@id": "urn:undefineds:xpod:RemoteDataAccessor", "comment": "urn:solid-server:default:FileDataAccessor" }
+      "unstructuredDataAccessor": { "@id": "urn:undefineds:xpod:RemoteDataAccessor" }
     },
     {
       "@id": "urn:undefineds:xpod:RemoteDataAccessor",
